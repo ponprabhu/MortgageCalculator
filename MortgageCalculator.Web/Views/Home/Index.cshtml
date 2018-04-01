@@ -1,0 +1,256 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+<style type="text/css">
+    .clsMandatory {
+        color: red;
+        font-weight: bold;
+        margin-left: 3px;
+    }
+</style>
+<div class="jumbotron">
+    <h1>Mortgage Calculator</h1>
+    <p class="lead">
+        The Mortgage Calculator helps you:
+        <ul>
+            <li>Choose the right loan for you</li>
+            <li>The Interests and Repayment on your loan</li>
+        </ul>
+    </p>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <form class="form-horizontal">
+            <fieldset>
+
+                <!-- Form Name -->
+                <legend>Calculator</legend>
+
+                <!-- Text input-->
+                <div class="form-group">
+                    <label class="col-md-2 control-label" for="txtLoanAmount">Borrowed Amount<span class="clsMandatory">*</span></label>
+                    <div class="col-md-4">
+                        <input id="txtLoanAmount" name="txtLoanAmount" type="text" placeholder="0" class="form-control input-md" maxlength="8" onchange="ConvertValueToNearastInt('txtLoanAmount')" onkeypress="    validateNumeric(event)">
+                        <span class="help-block">Enter the amount to borrow</span>
+                    </div>
+                    <label class="col-md-2 control-label" for="textLoanDuration">Loan Duration (Years)<span class="clsMandatory">*</span></label>
+                    <div class="col-md-4">
+                        <input id="textLoanDuration" name="textLoanDuration" type="text" placeholder="0" onchange="ConvertValueToNearastInt('textLoanDuration')" class="form-control input-md" maxlength="3" onkeypress="    validateNumeric(event)">
+                        <span class="help-block">Enter Loan Duration</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-md-2 control-label" for="textinput">Mortage Type<span class="clsMandatory">*</span></label>
+                    <div class="col-md-4">
+                        <select class="form-control dropdown" id="cmbMortgageType" onchange="filterMortages();"></select>
+                    </div>
+                    <label class="col-md-2 control-label" for="textinput">Mortages<span class="clsMandatory">*</span></label>
+                    <div class="col-md-4">
+                        <select class="form-control dropdown" style="max-width:350px;" id="cmbMortgages"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-2" style="float:right;">
+                        <input type="button" class="form-control btn btn-primary" value="Get Details" onclick="getRepaymentDetails();" />
+                    </div>
+                </div>
+                <div class="form-group" id="divRepaymentResult" style="margin-bottom:30px;padding: 20px 0px 0px 100px;width:90%;">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr class="success">
+                            <th><label>Total Loan Repayment</label></th>
+                            <th><label>Total Interest Charged</label></th>
+                           </tr>
+                       </thead>
+                        <tbody>
+                            <tr>
+                                <td><label id="lblTotalLoanRepayment"></label></td>
+                                <td><label id="lblTotalInterestCharged"></label></td>
+                            </tr>
+                        </tbody>
+                       
+                    </table>
+                   <div>
+                       <canvas id="pieChart" width="500" height="200"></canvas>
+                   </div>
+                </div>
+
+            </fieldset>
+        </form>
+    </div>
+</div>
+
+<script type="text/javascript">
+
+    var baseUrl = "http://localhost:49608/"; //WebAPI base URL
+    var mortgageItems = [];
+    $(document).ready(function () {
+        $("#divRepaymentResult").hide();
+        bindMortageData();
+    });
+
+    function ConvertValueToNearastInt(controlId)
+    {
+        $("#"+controlId).val(Math.ceil($("#"+controlId).val()));
+    }
+    //Filter mortgage by selected mortgagetype
+    function filterMortages() {
+        var tmpMortgages = mortgageItems;
+        var mortgageType = $("#cmbMortgageType").find('option:selected').val();
+
+        $('#cmbMortgages').find('option').remove()
+
+        //Get selected mortage list
+        if (mortgageType != -1) {
+            $(tmpMortgages).each(function () {
+                tmpMortgages = $.grep(tmpMortgages, function (e) {
+                    return parseInt(e.MortgageType) === parseInt(mortgageType);
+                });
+            });
+        }
+
+        //Bind mortgage list
+        $.each(tmpMortgages, function (i, item) {
+            $('#cmbMortgages').append($('<option>', {
+                value: item.MortageId,
+                text: item.InterestRate + " % P.a " + item.Name
+            }));
+        });
+    }
+
+    //Build Pie Chart for Repayment
+    function buildPieChart(loanAmount, totalInterestPayable)
+    {
+        new Chart(document.getElementById("pieChart"), {
+            type: 'pie',
+            data: {
+                labels: ["Principal Amount", "Interest Amount"],
+                datasets: [{
+                    backgroundColor: ["#3cba9f", "#c45850"],
+                    data: [loanAmount, totalInterestPayable]
+                }]
+            },
+            options: {
+                title: {
+                    display: true,
+                    text: 'Repayment Details'
+                }
+            }
+        });
+
+    }
+
+    //Calculate repayment details
+    function getRepaymentDetails() {
+        var currentMortgage = [];
+        var loanAmount = $("#txtLoanAmount").val();
+        var loanDuration = $("#textLoanDuration").val();
+
+        if (!loanAmount || loanAmount <= 0) {
+            alert("Loan amount should not be null and it should be greater than 0");
+            return false;
+        }
+        else if (!loanDuration || loanDuration <= 0) {
+            alert("Loan duration should not be null and it should be greater than 0");
+            return false;
+        }
+
+        var selectedMortgageId = $("#cmbMortgages").find('option:selected').val();
+
+        $(mortgageItems).each(function () {
+            currentMortgage = $.grep(mortgageItems, function (e) {
+                return parseInt(e.MortgageId) === parseInt(selectedMortgageId);
+            });
+        });
+
+        $("#divRepaymentResult").show();
+
+        var interstRate = parseFloat(currentMortgage[0].InterestRate.toString());
+
+        var p = loanAmount; //principle / loan amount borrowed
+        var i = (interstRate / 100) / 12; //monthly interest rate
+        var n = loanDuration * 12; //number of payments months
+       
+        var mortgagePerMonth = p * i * (Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+        var totalMortgage = Math.round((parseFloat(mortgagePerMonth.toString()) * n));
+        var totalInterestPayable = Math.round(totalMortgage - loanAmount);
+
+        //Total Interest charged
+        $("#lblTotalInterestCharged").html("$"+totalInterestPayable);
+      
+        //Total Loan Repayment
+        $("#lblTotalLoanRepayment").html("$" + totalMortgage);
+
+        buildPieChart(loanAmount, totalInterestPayable);
+    }
+
+    //Validate item exist on array
+    function IsItemExist(jsonObject, id) {
+        var result = false;
+        $(jsonObject).each(function () {
+            jsonObject = $.grep(jsonObject, function (e) {
+                return parseInt(e.Id) === parseInt(id);
+            });
+        });
+
+        if (Object.keys(jsonObject).length > 0)
+            result = true;
+        return result;
+    }
+
+    //Bind mortage combobox
+    function bindMortageData() {
+        $.blockUI();
+        var  urlGetMortgageTypes= baseUrl + "/api/Mortgage";
+        $.ajax({
+            type: "GET",
+            url: urlGetMortgageTypes,
+            success: function (data) {
+                mortgageItems = data;
+                var tmpMortageType = [];
+                if (data) {
+                    $('#cmbMortgageType').append($('<option>', {
+                        value: -1,
+                        text: "All"
+                    }));
+                }
+                $.each(data, function (i, item) {
+
+                    //bind mortagetype combobox
+                    if ($.inArray(item.MortgageType, tmpMortageType) < 0) {
+                        tmpMortageType.push(item.MortgageType);
+                        $('#cmbMortgageType').append($('<option>', {
+                            value: item.MortgageType,
+                            text: item.MortgageTypeText
+                        }));
+                    }
+
+                    //bind mortage combobox
+                    $('#cmbMortgages').append($('<option>', {
+                        value: item.MortgageId,
+                        text: item.InterestRate + " % P.a " + item.Name
+                    }));
+                });
+                
+                $.unblockUI();
+            },
+            error: function () {
+                $.unblockUI();
+            }
+        });
+    }
+
+    //Function helps to restrict user to enter only numeric values to textbox
+    function validateNumeric(evt) {
+        var theEvent = evt || window.event;
+        var key = theEvent.keyCode || theEvent.which;
+        key = String.fromCharCode(key);
+        var regex = /[0-9]|\./;
+        if (!regex.test(key)) {
+            theEvent.returnValue = false;
+            if (theEvent.preventDefault) theEvent.preventDefault();
+        }
+    }
+
+</script>
